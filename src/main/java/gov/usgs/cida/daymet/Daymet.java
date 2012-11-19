@@ -45,8 +45,8 @@ public class Daymet {
         map.put("tmin", new VariableOut("tmin", DataType.BYTE, 0.5d, Byte.MIN_VALUE));
         map.put("srad", new VariableOut("srad", DataType.SHORT, 0.2d, Short.MIN_VALUE));
         map.put("vp", new VariableOut("vp", DataType.SHORT, 20d, Short.MIN_VALUE));
-        map.put("swe", new VariableOut("swe", DataType.SHORT, 20d, Short.MIN_VALUE)); // ?? could fit in unsigned byte
-        map.put("prcp", new VariableOut("prcp", DataType.SHORT, 20d, Short.MIN_VALUE)); // ?? could fit in unsigned byte
+        map.put("swe", new VariableOut("swe", DataType.SHORT, 4d, Short.MIN_VALUE)); // ?? could fit in unsigned byte
+        map.put("prcp", new VariableOut("prcp", DataType.SHORT, 1d, Short.MIN_VALUE)); // ?? could fit in unsigned byte
         map.put("dayl", new VariableOut("dayl", DataType.FLOAT, 1d, Float.valueOf(-9999f)));
         VARIABLE_MAP = Collections.unmodifiableMap(map);
     }

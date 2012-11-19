@@ -169,8 +169,10 @@ public class Daymet {
         Tile tile = tileList.getTiles().get(0);
         NetcdfFile ncFile = tile.getNetCDFFile();
         
+        // NOTE: this works because the projectionRect units are in 'km' and the grid spacing is 1km.
         writer.addDimension(null, "x", (int)projectionRect.getWidth());
         writer.addDimension(null, "y", (int)projectionRect.getHeight());
+        
         writer.addDimension(null, "time", tRange.length());
         writer.addDimension(null, "nv", 2);
         
@@ -245,8 +247,8 @@ public class Daymet {
         Variable tbVariable = writer.findVariable("time_bnds");
         Variable ydVariable = writer.findVariable("yearday");
         
-        // projection rect is in 'km' we need to write 'm'.  Additionally, the 
-        // fact that the data grid is 1 km^2 makes the converion simple. 
+        // NOTE: projection rect is in 'km' we need to write 'm'.  Additionally, the 
+        // fact that the data grid is 1 km^2 makes the conversion simple. 
         writer.write(xVariable, Array.makeArray(xVariable.getDataType(), (int)projectionRect.getWidth(), projectionRect.getMinX() * 1000d, 1000d));
         writer.write(yVariable, Array.makeArray(yVariable.getDataType(), (int)projectionRect.getHeight(), projectionRect.getMaxY() * 1000d, -1000d));
         
@@ -388,12 +390,14 @@ public class Daymet {
         public List<Range> getSectionRangeYX(Tile tile) throws InvalidRangeException {
             List<Range> sectionYX = new ArrayList<Range>(2);
             
+            // NOTE: this works because the projectionRect units are in 'km' and the grid spacing is 1km.
             // use offset from max since step is < 0 (as index increases, value decreases) 
             int ySetMax = (int)projectionRect.getMaxY();
             int yTileMax = (int)tile.projectionRect.getMaxY();
             int yTileOffset = ySetMax - yTileMax;
             sectionYX.add(new Range(yTileOffset, yTileOffset + (int)tile.projectionRect.getHeight()));
             
+            // NOTE: this works because the projectionRect units are in 'km' and the grid spacing is 1km.
             // use offset from min since step is > 0 (as index increases, value increases)
             int xSetMin = (int)projectionRect.getMinX();
             int xTileMin = (int)tile.projectionRect.getMinX();

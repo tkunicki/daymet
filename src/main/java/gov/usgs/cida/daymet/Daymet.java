@@ -15,7 +15,6 @@ import java.io.InputStreamReader;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Formatter;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -170,16 +169,10 @@ public class Daymet {
         Tile tile = tileList.getTiles().get(0);
         NetcdfFile ncFile = tile.getNetCDFFile();
         
-        List<Dimension> oDimensions = ncFile.getDimensions();
-        oDimensions.remove(ncFile.findDimension("x"));
-        oDimensions.remove(ncFile.findDimension("y"));
-        oDimensions.remove(ncFile.findDimension("time"));
-        for (Dimension oDimension: oDimensions) {
-            writer.addDimension(null, oDimension.getName(), oDimension.getLength());
-        }
         writer.addDimension(null, "x", (int)projectionRect.getWidth());
         writer.addDimension(null, "y", (int)projectionRect.getHeight());
         writer.addDimension(null, "time", tRange.length());
+        writer.addDimension(null, "nv", 2);
         
         for (Variable oVariable : ncFile.getVariables()) {
             String oVariableName = oVariable.getShortName();
@@ -229,6 +222,11 @@ public class Daymet {
                 }
             }
         }
+        // revert MOWS 365->366 hack
+        if (writer.findVariable("time_bnds") == null) {
+            writer.addVariable(null, "time_bnds", DataType.DOUBLE, "time nv");
+            // no attributes to add for this variable
+        }
         for (Attribute oAttribute : ncFile.getGlobalAttributes()) {
             String oAttributeName = oAttribute.getName();
             // filter out year or tile specific attributes.
@@ -252,8 +250,16 @@ public class Daymet {
         writer.write(xVariable, Array.makeArray(xVariable.getDataType(), (int)projectionRect.getWidth(), projectionRect.getMinX() * 1000d, 1000d));
         writer.write(yVariable, Array.makeArray(yVariable.getDataType(), (int)projectionRect.getHeight(), projectionRect.getMaxY() * 1000d, -1000d));
         
-        writer.write(tVariable, ncFile.findVariable("time").read(Arrays.asList(new Range[] { tRange })));
-        writer.write(tbVariable, ncFile.findVariable("time_bnds").read(Arrays.asList(new Range[] { tRange, null /* 'null' means all */ })));
+        Array timeArray = ncFile.findVariable("time").read(Arrays.asList(new Range[] { tRange }));
+        writer.write(tVariable, timeArray);
+        //writer.write(tbVariable, ncFile.findVariable("time_bnds").read(Arrays.asList(new Range[] { tRange, null /* 'null' means all */ })));
+        Array tbArray = Array.factory(tbVariable.getDataType(), tbVariable.getShape());
+        for (int tIndex = 0, tbIndex = 0; tIndex < timeArray.getSize(); tIndex++,tbIndex+=2) {
+            double time = timeArray.getDouble(tIndex);
+            tbArray.setDouble(tbIndex, time - 0.5);
+            tbArray.setDouble(tbIndex + 1, time + 0.5);
+        }
+        writer.write(tbVariable, tbArray);
         writer.write(ydVariable, ncFile.findVariable("yearday").read(Arrays.asList(new Range[] { tRange })));
         writer.flush();
         

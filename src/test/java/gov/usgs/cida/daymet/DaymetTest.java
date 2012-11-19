@@ -45,7 +45,7 @@ public class DaymetTest  {
     public void tearDown() {
     }
 
-    @Test
+    @Ignore
     public void testGetTileList() throws IOException {
         Daymet.TileList tileList = Daymet.getTileListFromDirectory(new File("/Users/tkunicki/Data/daymet/tck"), 2003, "srad");
         try {
@@ -58,7 +58,7 @@ public class DaymetTest  {
         }
     }
     
-    @Test
+    @Ignore
     public void testGetTileList_ExceptionThrowing() {
         boolean threwExpected;
         try {
@@ -81,19 +81,19 @@ public class DaymetTest  {
         assertTrue("Expected IllegalStateException on \'null\' parameter", threwExpected);
     }
     
-    @Test
+    @Ignore
     public void testGenerateNetCDFInputFileName() {
         // NOTE: .cdl for dev
         assertEquals("12663_2003_srad.nc", Daymet.generateNetCDFInputFileName(12663, 2003, "srad"));
     }
     
-    @Test
+    @Ignore
     public void testGenerateNetCDFOutputFileName() {
         // NOTE: .cdl for dev
         assertEquals("2003-01_srad.nc", Daymet.generateNetCDFOutputFileName(2003, 1, "srad"));
     }
     
-    @Test
+    @Ignore
     public void testTile() throws IOException {
         Daymet.Tile tile = new Daymet.Tile(
                 new File("/Users/tkunicki/Data/daymet/tck/12663/12663_2003_srad.nc"), "srad");
@@ -107,7 +107,7 @@ public class DaymetTest  {
         }
     }
     
-    @Test
+    @Ignore
     public void testTileList() throws IOException {
         Daymet.TileList tileList = Daymet.getTileListFromDirectory(
                 new File("/Users/tkunicki/Data/daymet"), 2002, "vp");
@@ -122,7 +122,7 @@ public class DaymetTest  {
         }
     }
     
-    @Test
+    @Ignore
     public void testCreateFile() throws IOException, InvalidRangeException {
         
         Daymet.TileList tileList = Daymet.getTileListFromDirectory(
@@ -139,7 +139,24 @@ public class DaymetTest  {
         }
     }
     
-    @Test
+    @Ignore
+    public void testCreateFileMOWSHack() throws IOException, InvalidRangeException {
+        
+        Daymet.TileList tileList = Daymet.getTileListFromDirectory(
+                    new File("/Users/tkunicki/Data/daymet"), 2000, "vp");
+        try {
+            NetcdfFileWriter writer = Daymet.createFile("/Users/tkunicki/Data/daymet/combined/test-create.nc", tileList, Daymet.VARIABLE_MAP.get("vp"), new Range(0,3));
+            assertNotNull(writer);
+            // check layout
+            // delete file
+        } finally {
+            if (tileList != null) {
+                tileList.dispose();
+            }
+        }
+    }
+    
+    @Ignore
     public void testWriteFile() throws IOException, InvalidRangeException {
         Daymet.TileList tileList = Daymet.getTileListFromDirectory(
                     new File("/Users/tkunicki/Data/daymet"), 2002, "vp");
@@ -150,7 +167,7 @@ public class DaymetTest  {
         }
     }
     
-    @Test
+    @Ignore
     public void testTraverse() throws IOException, InvalidRangeException {
         try {
             Daymet.traverse(

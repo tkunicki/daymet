@@ -71,7 +71,7 @@ public class Daymet {
         return list;
     }
     
-    public static void traverse(File srcDirectory, File dstDirectory, List<Integer> years, List<String> variables, int tStep) throws IOException, InvalidRangeException {
+    public static void traverse(File srcDirectory, File dstDirectory, List<Integer> years, List<String> variables, int tStep, boolean forceOverwrite) throws IOException, InvalidRangeException {
         if (!dstDirectory.exists()) {
             if (!dstDirectory.mkdirs()) {
                 throw new IllegalArgumentException(dstDirectory.getPath() + " does not exist and could not be created");
@@ -105,9 +105,13 @@ public class Daymet {
                                 }
                                 String ncName = generateNetCDFOutputFileName(year, tIndex/tStep, variable);
                                 File ncFile = new File(dstDirectory, ncName);
-                                System.out.println("starting " + ncFile.getPath() + " [" + tMin + ":" + tMax + "]") ;
-                                writeFile(ncFile.getPath(), tileList, variableOut, new Range(tMin, tMax - 1));  // - 1 since upper bound is inclusive
-                                System.out.println("finished " + ncFile.getPath() + ": " + ((double)(System.currentTimeMillis() - t0) / 1000d) + "s");
+                                if (!ncFile.exists() || forceOverwrite) {
+                                    System.out.println("starting " + ncFile.getPath() + " [" + tMin + ":" + tMax + "]") ;
+                                    writeFile(ncFile.getPath(), tileList, variableOut, new Range(tMin, tMax - 1));  // - 1 since upper bound is inclusive
+                                    System.out.println("finished " + ncFile.getPath() + ": " + ((double)(System.currentTimeMillis() - t0) / 1000d) + "s");
+                                } else {
+                                    System.out.println("skipped " + ncFile.getPath() + ", file already exists.");
+                                }
                             }
                         } finally {
                             if (tileList != null) {
@@ -451,6 +455,7 @@ public class Daymet {
             Integer timeSteps = null;
             String srcPath = null;
             String dstPath = null;
+            Boolean forceOverwrite = null;
             
             for (String arg : args) {
                 if (arg.startsWith("-y=") && arg.length() > 3) {
@@ -478,6 +483,8 @@ public class Daymet {
                     srcPath = arg.substring(3);
                 } else if (arg.startsWith("-d=") && arg.length() > 3) {
                     dstPath = arg.substring(3);
+                } else if (arg.equals("-f")) {
+                    forceOverwrite = true;
                 } else {
                     printUsageAndExit("Argument unknown: " + arg);
                 }
@@ -527,14 +534,21 @@ public class Daymet {
                 }
             }
             
+            if (forceOverwrite == null) {
+                forceOverwrite = false;
+            }
+            
             System.out.println("Traversing...");
             System.out.println(" years:      " + Joiner.on(", ").join(years));
             System.out.println(" variables:  " + Joiner.on(", ").join(variables));
             System.out.println(" timesteps:  " + timeSteps);
             System.out.println(" source dir: " + srcPath);
             System.out.println(" dest dir:   " + dstPath);
+            if (forceOverwrite) {
+                System.out.println(" force overwrite.");
+            }
 
-            traverse(srcDir, dstDir, years, variables, timeSteps);
+            traverse(srcDir, dstDir, years, variables, timeSteps, forceOverwrite);
             
         } catch (Exception e) {
             e.printStackTrace(System.err);

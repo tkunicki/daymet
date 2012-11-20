@@ -175,7 +175,8 @@ public class DaymetTest  {
                     new File("/Users/tkunicki/Data/daymet/combined"),
                     Arrays.asList(new Integer[] { 2002 }),
                     Arrays.asList(new String[] { "vp"}),
-                    4);
+                    4,
+                    true);
         } finally {
         }
     }

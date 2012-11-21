@@ -192,13 +192,19 @@ public class Daymet {
                 for (Attribute oAttribute : oVariable.getAttributes()) {
                     String oAttributeName = oAttribute.getName();
                     if ( !( '_' == oAttributeName.charAt(0) ||
-                            "missing_value".equals(oAttributeName))) {
+                            "missing_value".equals(oAttributeName) ||
+                            "valid_range".equals(oAttributeName) )) {
                         writer.addVariableAttribute(nVariable, oAttribute);
                     }
                 }
                 nVariable.addAttribute(new Attribute("missing_value", variableOut.missingValue));
                 if (variableOut.scale != 1) {
                     nVariable.addAttribute(new Attribute("scale_factor", Double.valueOf(variableOut.scale)));
+                }
+                Attribute vrAttribute = createValidRangeAttribute(
+                        oVariable.findAttribute("valid_range"), variableOut);
+                if (vrAttribute != null) {
+                    nVariable.addAttribute(vrAttribute);
                 }
             } else if ( "yearday".equals(oVariableName)) {
                 // Revert MOWS 365->366 hack, rewrite "valid_range" attribute
@@ -440,6 +446,20 @@ public class Daymet {
         } else {
             throw new UnsupportedOperationException("fillMissingQuick(...) not implemented for this array type");
         }
+    }
+    
+    public static Attribute createValidRangeAttribute(Attribute o, VariableOut v) {
+        if (o == null || v == null) {
+            return null;
+        }
+        if (v.scale == 1) {
+            return o;
+        }
+        Array a = Array.factory(v.dataType, new int[] { 2 });
+        // NOTE: This works because all scaled valid_range will result in integers for daymet
+        a.setDouble(0, Math.round(o.getNumericValue(0).doubleValue() / v.scale));
+        a.setDouble(1, Math.round(o.getNumericValue(1).doubleValue() / v.scale));
+        return new Attribute(o.getName(), a);
     }
 
     public static void main(String[] args) {

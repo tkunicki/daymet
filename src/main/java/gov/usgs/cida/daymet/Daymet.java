@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import ucar.ma2.Array;
 import ucar.ma2.InvalidRangeException;
-import ucar.nc2.Dimension;
 import ucar.nc2.NetcdfFile;
 import ucar.nc2.Variable;
 import java.io.File;
@@ -157,7 +156,7 @@ public class Daymet {
                             }
                         }
                     } else {
-                        System.out.println(" skipped tileid " + tile.getNetCDFFile().findAttValueIgnoreCase(null, "tileid", "unknown"));
+                        System.out.println(" skipped tile for file " + tile.getFile().getName());
                     }
                 }
             }
@@ -173,9 +172,9 @@ public class Daymet {
         Tile tile = tileList.getTiles().get(0);
         NetcdfFile ncFile = tile.getNetCDFFile();
         
-        // NOTE: this works because the projectionRect units are in 'km' and the grid spacing is 1km.
-        writer.addDimension(null, "x", (int)projectionRect.getWidth());
-        writer.addDimension(null, "y", (int)projectionRect.getHeight());
+        
+        writer.addDimension(null, "x", tileList.getXDimensionLength());
+        writer.addDimension(null, "y", tileList.getYDimensionLength());
         
         writer.addDimension(null, "time", tRange.length());
         writer.addDimension(null, "nv", 2);
@@ -257,10 +256,9 @@ public class Daymet {
         Variable tbVariable = writer.findVariable("time_bnds");
         Variable ydVariable = writer.findVariable("yearday");
         
-        // NOTE: projection rect is in 'km' we need to write 'm'.  Additionally, the 
-        // fact that the data grid is 1 km^2 makes the conversion simple. 
-        writer.write(xVariable, Array.makeArray(xVariable.getDataType(), (int)projectionRect.getWidth(), projectionRect.getMinX() * 1000d, 1000d));
-        writer.write(yVariable, Array.makeArray(yVariable.getDataType(), (int)projectionRect.getHeight(), projectionRect.getMaxY() * 1000d, -1000d));
+        // NOTE: projection rect is in 'km' we need to write 'm'.
+        writer.write(xVariable, Array.makeArray(xVariable.getDataType(), tileList.getXDimensionLength(), (projectionRect.getMinX() + 0.5) * 1000d, 1000d));
+        writer.write(yVariable, Array.makeArray(yVariable.getDataType(), tileList.getYDimensionLength(), (projectionRect.getMaxY() - 0.5) * 1000d, -1000d));
         
         Array timeArray = ncFile.findVariable("time").read(Arrays.asList(new Range[] { tRange }));
         writer.write(tVariable, timeArray);
@@ -307,10 +305,12 @@ public class Daymet {
     
     
     public static class Tile {
+        final File file;
         FeatureDataset featureDataset = null;
         GridDatatype gridDatatype = null;
         ProjectionRect projectionRect = null;
         Tile(File file, String variable) throws IOException {
+            this.file = file;
             featureDataset = FeatureDatasetFactoryManager.open(FeatureType.GRID, file.getPath(), null, new Formatter(System.err));
             if (featureDataset instanceof GridDataset) {
                 featureDataset.calcBounds();
@@ -323,9 +323,17 @@ public class Daymet {
                     CoordinateAxis xa = gcs.getXHorizAxis();
                     CoordinateAxis ya = gcs.getYHorizAxis();
                     if (xa instanceof CoordinateAxis1D && ya instanceof CoordinateAxis1D) {
-                        projectionRect = new ProjectionRect(
-                                xa.getMinValue(), ya.getMinValue(),
-                                xa.getMaxValue(), ya.getMaxValue());
+                        if ( (xa.getSize() == 1 || (xa.getMinValue() != xa.getMaxValue())) &&
+                             (ya.getSize() == 1 || (ya.getMinValue() != ya.getMaxValue()))) {
+                            // Offset of 0.5km is specific to daymet data as the grid cell width is 1km
+                            projectionRect = new ProjectionRect(
+                                    xa.getMinValue() - 0.5,
+                                    ya.getMinValue() - 0.5,
+                                    xa.getMaxValue() + 0.5,
+                                    ya.getMaxValue() + 0.5);
+                        } else {
+                            // leave projectionRect null
+                        }
                     } else {
                         throw new IllegalArgumentException("Unable to handle x or y coordinate axes with greater than 1 dimension(s)");
                     }
@@ -341,12 +349,28 @@ public class Daymet {
             return projectionRect;
         }
         
+        public GridDatatype getGridDatatype() {
+            return gridDatatype;
+        }
+        
         public NetcdfFile getNetCDFFile() {
             return featureDataset == null ? null : featureDataset.getNetcdfFile();
         }
         
-        public GridDatatype getGridDatatype() {
-            return gridDatatype;
+        public File getFile() {
+            return file;
+        }
+        
+        public boolean isTileValid() {
+            return projectionRect != null;
+        }
+        
+        public int getXDimensionLength() {
+            return (int)Math.round(projectionRect.getWidth());
+        }
+        
+        public int getYDimensionLength() {
+            return (int)Math.round(projectionRect.getHeight());
         }
         
         public void dispose() {
@@ -371,12 +395,18 @@ public class Daymet {
         
         public void add(File file) throws IOException {
             Tile tile = new Tile(file, variable);
-            if (projectionRect == null) {
-                projectionRect = new ProjectionRect(tile.getProjectionRect());
+            if (tile.isTileValid()) {
+                if (projectionRect == null) {
+                    projectionRect = new ProjectionRect(tile.getProjectionRect());
+                } else {
+                    projectionRect.add(tile.getProjectionRect());
+                }
+                tileList.add(tile);
             } else {
-                projectionRect.add(tile.getProjectionRect());
+                System.err.println("Skipping invalid tile: " + file.getName());
+                tile.dispose();
             }
-            tileList.add(tile);
+            
         }
         
         public List<Tile> getTiles() {
@@ -386,7 +416,7 @@ public class Daymet {
         public ProjectionRect getProjectionRect() {
             return projectionRect;
         }
-        
+         
         public void dispose() {
             if (tileList != null) {
                 for (Tile tile : tileList) {
@@ -402,23 +432,33 @@ public class Daymet {
             
             // NOTE: this works because the projectionRect units are in 'km' and the grid spacing is 1km.
             // use offset from max since step is < 0 (as index increases, value decreases) 
-            int ySetMax = (int)projectionRect.getMaxY();
-            int yTileMax = (int)tile.projectionRect.getMaxY();
+            int ySetMax = (int)Math.round(projectionRect.getMaxY() - 1d);
+            int yTileMax = (int)Math.round(tile.projectionRect.getMaxY() - 1d);
             int yTileOffset = ySetMax - yTileMax;
-            sectionYX.add(new Range(yTileOffset, yTileOffset + (int)tile.projectionRect.getHeight()));
+            // NOTE: -1 since upper edge is inclusive
+            sectionYX.add(new Range(yTileOffset, yTileOffset + (int)Math.round(tile.projectionRect.getHeight()) - 1));
             
             // NOTE: this works because the projectionRect units are in 'km' and the grid spacing is 1km.
             // use offset from min since step is > 0 (as index increases, value increases)
-            int xSetMin = (int)projectionRect.getMinX();
-            int xTileMin = (int)tile.projectionRect.getMinX();
+            int xSetMin = (int)Math.round(projectionRect.getMinX());
+            int xTileMin = (int)Math.round(tile.projectionRect.getMinX());
             int xTileOffset = xTileMin - xSetMin;
-            sectionYX.add(new Range(xTileOffset, xTileOffset + (int)tile.projectionRect.getWidth()));
+            // NOTE:  -1 since upper edge is inclusive
+            sectionYX.add(new Range(xTileOffset, xTileOffset + (int)Math.round(tile.projectionRect.getWidth()) - 1));
 
             return sectionYX;
         }
         
         public int size() {
             return tileList == null ? 0 : tileList.size();
+        }
+        
+        public int getXDimensionLength() {
+            return (int)Math.round(projectionRect.getWidth());
+        }
+        
+        public int getYDimensionLength() {
+            return (int)Math.round(projectionRect.getHeight());
         }
     }
     

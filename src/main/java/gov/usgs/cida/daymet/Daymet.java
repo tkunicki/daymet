@@ -107,6 +107,7 @@ public class Daymet {
                                 if (!ncFile.exists() || forceOverwrite) {
                                     System.out.println("starting " + ncFile.getPath() + " [" + tMin + ":" + tMax + "]") ;
                                     writeFile(ncFile.getPath(), tileList, variableOut, new Range(tMin, tMax - 1));  // - 1 since upper bound is inclusive
+//                                    writeFileX(ncFile.getPath(), tileList, variableOut, new Range(tMin, tMax - 1));  // - 1 since upper bound is inclusive
                                     System.out.println("finished " + ncFile.getPath() + ": " + ((double)(System.currentTimeMillis() - t0) / 1000d) + "s");
                                 } else {
                                     System.out.println("skipped " + ncFile.getPath() + ", file already exists.");
@@ -127,6 +128,7 @@ public class Daymet {
         }
     }
     
+    // copies one timestep for tile per pass (one pass per timestep)
     public static void writeFile(String fileName, TileList tileList, VariableOut variable, Range timeInRange) throws IOException, InvalidRangeException {
         NetcdfFileWriter writer = Daymet.createFile(fileName, tileList, variable, timeInRange);
         Variable outputVariable = writer.findVariable(variable.name);
@@ -162,6 +164,39 @@ public class Daymet {
             }
             writer.write(outputVariable, new int[] { timeOutIndex++, 0, 0 }, outputArray);
         }
+        writer.close();
+    }
+    
+    // copies all timesteps for tile in one pass
+    public static void writeFileX(String fileName, TileList tileList, VariableOut variable, Range timeInRange) throws IOException, InvalidRangeException {
+        NetcdfFileWriter writer = Daymet.createFile(fileName, tileList, variable, timeInRange);
+        Variable outputVariable = writer.findVariable(variable.name);
+        Array outputArray = Array.factory(outputVariable.getDataType(), outputVariable.getShape());
+        fillMissingQuick(outputArray, variable.missingValue);
+        for (Daymet.Tile tile : tileList.getTiles()) {
+            Array tileArray = tile.getNetCDFFile().findVariable(variable.name).read(Arrays.asList(timeInRange, null, null));
+            if (tileArray.getSize() > 1) {
+                List<Range> tileSectionRanges = new ArrayList<Range>(3);
+                tileSectionRanges.add(null);
+                tileSectionRanges.addAll(tileList.getSectionRangeYX(tile));
+                Array sectionedArray  = outputArray.section(tileSectionRanges);
+                if (sectionedArray.getSize() == tileArray.getSize()) {
+                    IndexIterator sectionIterator = sectionedArray.getIndexIterator();
+                    IndexIterator tileIterator = tileArray.getIndexIterator();
+                    while (sectionIterator.hasNext() && tileIterator.hasNext()) {
+                        float t = tileIterator.getFloatNext();
+                        if (t == t) {
+                            sectionIterator.setObjectNext(Double.valueOf(t / variable.scale));
+                        } else {
+                            sectionIterator.next();
+                        }
+                    }
+                } else {
+                    System.out.println(" skipped tile for file " + tile.getFile().getName());
+                }
+            }
+        }
+        writer.write(outputVariable, outputArray);
         writer.close();
     }
     
